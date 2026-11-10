@@ -1,13 +1,136 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nombre del Proyecto</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8f5">
+  <meta name="description" content="Encuentra y descubre servicios independientes cerca de ti.">
+  <title>Servicios Locales — encuentra talento cerca de ti</title>
+  <!-- Cuando se defina el dominio público, agrega aquí <link rel="canonical"> y publica un sitemap.xml. -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <h1>Hola mundo</h1>
-  <script src="script.js"></script>
+  <a class="skip-link" href="#directorio">Saltar al directorio</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Servicios Locales, inicio">
+      <span class="brand-mark" aria-hidden="true">s<span>.</span></span>
+      <span>servicios<span class="brand-light">locales</span></span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Abrir menú">
+      <span></span><span></span><span></span>
+    </button>
+    <nav id="primary-nav" class="primary-nav" aria-label="Navegación principal">
+      <a href="#directorio">Explorar</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a class="nav-login" href="#acceso" data-open-auth>Iniciar sesión</a>
+      <button class="button button-small button-dark" type="button" data-open-profile>Publica tu servicio <span aria-hidden="true">↗</span></button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-dot"></span> TALENTO LOCAL, CERCA DE TI</p>
+        <h1 id="hero-title">Lo bueno de<br>tu comunidad, <em>aquí.</em></h1>
+        <p class="hero-intro">Encuentra personas increíbles que hacen un gran trabajo cerca de ti. Apoya lo local, conecta directo.</p>
+        <a class="hero-link" href="#directorio">Descubrir servicios <span aria-hidden="true">↓</span></a>
+        <div class="hero-proof"><span class="avatar-stack" aria-hidden="true"><i>M</i><i>A</i><i>L</i></span><span>Pequeños negocios, grandes ideas.</span></div>
+      </div>
+      <div class="hero-art" aria-label="Ilustración de una flor y hojas">
+        <div class="art-sun"></div><div class="art-shape art-shape-one"></div><div class="art-shape art-shape-two"></div>
+        <div class="art-flower"><span></span><span></span><span></span><span></span><span></span><b></b></div>
+        <div class="art-leaf art-leaf-one"></div><div class="art-leaf art-leaf-two"></div>
+        <div class="art-caption"><span class="caption-line"></span><span>HECHO CON CARIÑO<br>EN TU COMUNIDAD</span></div>
+        <span class="art-sparkle sparkle-one">✳</span><span class="art-sparkle sparkle-two">✳</span>
+      </div>
+      <div class="hero-bottom"><span>01 — DIRECTORIO LOCAL</span><span>CONOCE · CONECTA · CRECE</span></div>
+    </section>
+
+    <section id="directorio" class="directory section-wrap" aria-labelledby="directory-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">GENTE QUE HACE</p><h2 id="directory-title">Encuentra tu próximo<br><em>favorito.</em></h2></div>
+        <p class="section-note">Personas reales. Servicios cercanos.<br>Conexiones que hacen comunidad.</p>
+      </div>
+      <form id="search-form" class="search-panel" role="search">
+        <label class="search-field"><span class="field-icon" aria-hidden="true">⌕</span><span class="sr-only">Buscar por servicio o nombre</span><input id="search-query" type="search" maxlength="100" placeholder="¿Qué estás buscando?"></label>
+        <label class="search-field"><span class="field-icon" aria-hidden="true">⌖</span><span class="sr-only">Localidad</span><input id="search-locality" type="search" maxlength="80" placeholder="Tu localidad"></label>
+        <label class="search-field search-category"><span class="sr-only">Categoría</span><select id="search-category"><option value="">Todas las categorías</option></select></label>
+        <button class="button button-dark search-button" type="submit">Buscar <span aria-hidden="true">↗</span></button>
+      </form>
+      <div class="directory-toolbar">
+        <p id="results-summary" class="results-summary" role="status" aria-live="polite">Cargando servicios locales…</p>
+        <div class="directory-actions"><label for="sort-order" class="sort-label">Ordenar</label><select id="sort-order" aria-label="Ordenar resultados"><option value="recent">Más recientes</option><option value="name">Nombre A–Z</option></select><button id="clear-filters" class="text-button" type="button">Limpiar filtros</button></div>
+      </div>
+      <div id="service-list" class="service-grid" aria-live="polite" aria-busy="true"></div>
+      <div id="directory-notice" class="notice notice-info" role="status" hidden></div>
+    </section>
+
+    <section id="como-funciona" class="community-banner">
+      <div class="community-doodle" aria-hidden="true">✳</div>
+      <div><p class="eyebrow">TU COMUNIDAD TIENE MUCHO QUE OFRECER</p><h2>¿Tienes un servicio<br>que compartir?</h2></div>
+      <div class="community-cta"><p>Haz que más personas te encuentren. Publica tu perfil gratis y conecta con tu comunidad.</p><button class="button button-light" type="button" data-open-profile>Publica tu servicio <span aria-hidden="true">↗</span></button></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand brand-footer" href="/" aria-label="Servicios Locales, inicio"><span class="brand-mark" aria-hidden="true">s<span>.</span></span><span>servicios<span class="brand-light">locales</span></span></a>
+    <p>Un directorio para encontrarnos más cerca.</p>
+    <nav aria-label="Enlaces legales"><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a></nav>
+    <span class="copyright">© <span id="current-year"></span> Servicios Locales</span>
+  </footer>
+
+  <dialog id="auth-dialog" class="site-dialog" aria-labelledby="auth-title">
+    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
+    <p class="eyebrow">QUÉ BUENO VERTE</p><h2 id="auth-title">Conecta con tu comunidad.</h2><p class="dialog-description">Inicia sesión con Google para administrar tu perfil o publicar un servicio.</p>
+    <button id="google-login" class="button button-dark button-wide" type="button">Continuar con Google <span aria-hidden="true">↗</span></button>
+    <p id="auth-message" class="form-message" role="status"></p>
+  </dialog>
+
+  <dialog id="profile-dialog" class="site-dialog profile-dialog" aria-labelledby="profile-title">
+    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
+    <p class="eyebrow">TU TALENTO, MÁS CERCA</p><h2 id="profile-title">Publica tu servicio.</h2>
+    <p class="dialog-description">Completa tu perfil. Los cambios se revisan antes de aparecer en el directorio.</p>
+    <form id="profile-form" novalidate>
+      <label for="profile-name">Nombre del servicio <span aria-hidden="true">*</span></label><input id="profile-name" name="name" required maxlength="80" autocomplete="organization">
+      <label for="profile-category">Categoría principal <span aria-hidden="true">*</span></label><select id="profile-category" name="category_id" required><option value="">Selecciona una categoría</option></select>
+      <label for="profile-locality">Localidad <span aria-hidden="true">*</span></label><input id="profile-locality" name="locality" required maxlength="80" autocomplete="address-level2">
+      <label for="profile-description">Cuéntanos qué haces <span aria-hidden="true">*</span></label><textarea id="profile-description" name="description" required minlength="20" maxlength="600" rows="4"></textarea><span class="field-hint">Entre 20 y 600 caracteres.</span>
+      <div class="form-two-col"><div><label for="profile-phone">Teléfono</label><input id="profile-phone" name="phone" type="tel" maxlength="25" autocomplete="tel"><label class="checkbox-label"><input id="profile-show-phone" name="show_phone" type="checkbox" checked> Mostrar teléfono</label></div><div><label for="profile-whatsapp">WhatsApp</label><input id="profile-whatsapp" name="whatsapp" type="tel" maxlength="25"><label class="checkbox-label"><input id="profile-show-whatsapp" name="show_whatsapp" type="checkbox"> Mostrar WhatsApp</label></div></div>
+      <label for="profile-website">Sitio web (opcional)</label><input id="profile-website" name="website" type="url" maxlength="200" placeholder="https://">
+      <label for="profile-photo">Fotografía (JPEG, PNG o WebP; máximo 3 MB)</label><input id="profile-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp">
+      <label class="checkbox-label consent-label"><input id="profile-adult" type="checkbox" required> Confirmo que soy mayor de 18 años.</label>
+      <label class="checkbox-label consent-label"><input id="profile-consent" type="checkbox" required> Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> y el tratamiento de mis datos según el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>. Entiendo que las fotografías cargadas pueden ser accesibles mediante su enlace durante la revisión.</label>
+      <p id="profile-message" class="form-message" role="status" aria-live="polite"></p>
+      <button class="button button-dark button-wide" type="submit">Enviar para revisión <span aria-hidden="true">↗</span></button>
+    </form>
+  </dialog>
+
+  <dialog id="admin-dialog" class="site-dialog profile-dialog" aria-labelledby="admin-title">
+    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
+    <p class="eyebrow">ADMINISTRACIÓN PRIVADA</p><h2 id="admin-title">Perfiles pendientes.</h2>
+    <div id="admin-content" aria-live="polite"></div>
+  </dialog>
+
+  <dialog id="service-dialog" class="site-dialog service-dialog" aria-labelledby="service-detail-title">
+    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
+    <div id="service-detail-content"></div>
+  </dialog>
+
+  <dialog id="report-dialog" class="site-dialog" aria-labelledby="report-title">
+    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
+    <p class="eyebrow">AYÚDANOS A CUIDAR EL DIRECTORIO</p><h2 id="report-title">Reportar un perfil.</h2>
+    <p class="dialog-description">Cuéntanos qué debemos revisar. Tu reporte será visible para el equipo de administración.</p>
+    <form id="report-form">
+      <label for="report-reason">Motivo del reporte</label>
+      <textarea id="report-reason" minlength="10" maxlength="500" required rows="4" placeholder="Describe el problema (10–500 caracteres)"></textarea>
+      <p id="report-message" class="form-message" role="status"></p>
+      <button class="button button-dark button-wide" type="submit">Enviar reporte <span aria-hidden="true">↗</span></button>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# Agrega una URL de sitemap.xml cuando el dominio público esté definido.
