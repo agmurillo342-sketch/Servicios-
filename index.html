@@ -28,9 +28,24 @@
       <a href="#directorio">Explorar</a>
       <a href="#como-funciona">Cómo funciona</a>
       <a class="nav-login" href="#acceso" data-open-auth>Iniciar sesión</a>
+      <button id="nav-account" class="text-button" type="button" hidden>Mi cuenta</button>
+      <button id="nav-sign-out" class="text-button" type="button" hidden>Cerrar sesión</button>
       <button class="button button-small button-dark" type="button" data-open-profile>Publica tu servicio <span aria-hidden="true">↗</span></button>
     </nav>
   </header>
+
+  <div id="account-status-wrap" class="account-status-wrap" hidden>
+    <div id="account-status" class="account-status notice notice-info">
+      <div class="account-status-copy">
+        <p class="account-status-label">Estado de la cuenta</p>
+        <p id="account-state" class="account-state" role="status" aria-live="polite"></p>
+        <p id="account-status-message" class="account-status-message"></p>
+        <span id="account-status-badge" class="account-status-badge" hidden></span>
+        <p id="account-status-description" class="account-status-description" hidden></p>
+      </div>
+      <button id="account-status-action" class="button button-dark button-small" type="button" hidden></button>
+    </div>
+  </div>
 
   <main>
     <section class="hero" aria-labelledby="hero-title">

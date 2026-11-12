@@ -16,6 +16,13 @@ const profileForm = $("#profile-form");
 const categoryCache = new Map();
 let searchTimer;
 let currentUser = null;
+let authStateVersion = 0;
+let profileRequestVersion = 0;
+let authSubscription = null;
+let resolveAuthStateReady;
+const authStateReady = new Promise((resolve) => {
+  resolveAuthStateReady = resolve;
+});
 let editingProfile = null;
 let reportingProfileId = null;
 let categoriesLoadFailed = false;
@@ -28,6 +35,152 @@ function showNotice(message, type = "info") {
   directoryNotice.textContent = message;
   directoryNotice.className = `notice notice-${type}`;
   directoryNotice.hidden = false;
+}
+
+function updateAuthNavigation() {
+  const signedIn = Boolean(currentUser);
+  $("[data-open-auth]").hidden = signedIn;
+  $("#nav-account").hidden = !signedIn;
+  $("#nav-sign-out").hidden = !signedIn;
+}
+
+function clearAuthScopedUi() {
+  for (const selector of ["#profile-dialog", "#admin-dialog", "#report-dialog"]) {
+    const dialog = $(selector);
+    if (dialog.open) dialog.close();
+  }
+  profileForm.reset();
+  setProfileFormDisabled(false);
+  editingProfile = null;
+  $("#profile-title").textContent = "Publica tu servicio.";
+  $("#profile-message").textContent = "";
+  profileForm.querySelector('[type="submit"]').textContent = profileSubmitLabel();
+  $("#admin-content").textContent = "";
+  $("#report-form").reset();
+  $("#report-message").textContent = "";
+  reportingProfileId = null;
+}
+
+function showAccountStatus({
+  state,
+  message = "",
+  badge = "",
+  description = "",
+  type = "info",
+  actionLabel = "",
+} = {}) {
+  const wrapper = $("#account-status-wrap");
+  const status = $("#account-status");
+  const action = $("#account-status-action");
+  status.className = `notice notice-${type}`;
+  $("#account-state").textContent = state;
+  $("#account-status-message").textContent = message;
+  $("#account-status-badge").textContent = badge;
+  $("#account-status-badge").hidden = !badge;
+  $("#account-status-description").textContent = description;
+  $("#account-status-description").hidden = !description;
+  status.hidden = false;
+  wrapper.hidden = false;
+  action.hidden = !actionLabel;
+  action.textContent = actionLabel;
+}
+
+function renderAccountStatus(profile) {
+  if (!currentUser) {
+    showAccountStatus({
+      state: "Sin sesión",
+      message: "Inicia sesión con Google para consultar tu perfil.",
+      actionLabel: "Iniciar sesión con Google",
+    });
+    return;
+  }
+  if (profile === undefined) {
+    showAccountStatus({
+      state: "Sesión activa",
+      message: "Cargando el estado de tu perfil…",
+    });
+    return;
+  }
+  if (!profile) {
+    showAccountStatus({
+      state: "Sesión activa",
+      message: "Aún no has completado tu registro.",
+      actionLabel: "Completar registro",
+    });
+    return;
+  }
+  if (profile.status === "pending") {
+    showAccountStatus({
+      state: "Sesión activa",
+      message: "Tu perfil está pendiente de revisión",
+      badge: "Pending",
+      description: "Tu solicitud fue recibida. Podrás aparecer en el directorio cuando sea aprobada.",
+    });
+    return;
+  }
+  if (profile.status === "approved") {
+    showAccountStatus({
+      state: "Sesión activa",
+      message: "Tu perfil ha sido aprobado",
+      badge: "Approved",
+    });
+    return;
+  }
+  if (profile.status === "rejected") {
+    showAccountStatus({
+      state: "Sesión activa",
+      message: "Tu perfil fue rechazado.",
+      badge: "Rejected",
+      description: "Revisa tus datos y las indicaciones para corregirlo.",
+    });
+    return;
+  }
+  showAccountStatus({
+    state: "Sesión activa",
+    message: "No se pudo determinar el estado de tu perfil.",
+    type: "error",
+  });
+}
+
+function openAccountAction() {
+  if (currentUser) {
+    openProfile();
+  } else {
+    showAuth();
+  }
+}
+
+async function refreshOwnProfile(userId, expectedAuthVersion = authStateVersion) {
+  const requestVersion = ++profileRequestVersion;
+  if (currentUser?.id === userId) renderAccountStatus(undefined);
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (
+      expectedAuthVersion !== authStateVersion ||
+      requestVersion !== profileRequestVersion ||
+      currentUser?.id !== userId
+    ) {
+      return { profile: null, error: null, stale: true };
+    }
+    renderAccountStatus(data);
+    return { profile: data, error: null, stale: false };
+  } catch (error) {
+    if (
+      expectedAuthVersion === authStateVersion &&
+      requestVersion === profileRequestVersion &&
+      currentUser?.id === userId
+    ) {
+      showAccountStatus("No se pudo consultar el estado de tu perfil. Intenta actualizar la página.", {
+        type: "error",
+      });
+    }
+    return { profile: null, error, stale: false };
+  }
 }
 
 function showServiceDetails(id) {
@@ -189,60 +342,80 @@ async function requireAuth() {
     showAuth("El acceso estará disponible cuando se configure Supabase.");
     return false;
   }
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error) {
-      showAuth("No pudimos verificar tu sesión. Intenta iniciar sesión de nuevo.");
-      return false;
-    }
-    currentUser = user;
-    if (!user) {
-      showAuth("Inicia sesión para publicar o administrar un servicio.");
-      return false;
-    }
-    return true;
-  } catch {
-    showAuth("No pudimos verificar tu sesión. Intenta iniciar sesión de nuevo.");
+  await authStateReady;
+  if (!currentUser) {
+    showAuth("Inicia sesión para publicar o administrar un servicio.");
     return false;
   }
+  return true;
+}
+
+function setProfileFormDisabled(disabled) {
+  profileForm.querySelectorAll("input, select, textarea, button[type='submit']")
+    .forEach((field) => {
+      field.disabled = disabled;
+    });
+}
+
+function populateProfileForm(profile) {
+  for (const field of ["name", "category_id", "locality", "description", "phone", "whatsapp", "website"]) {
+    const input = profileForm.elements.namedItem(field);
+    if (input) input.value = profile[field] || "";
+  }
+  $("#profile-show-phone").checked = Boolean(profile.show_phone);
+  $("#profile-show-whatsapp").checked = Boolean(profile.show_whatsapp);
+}
+
+function profileSubmitLabel() {
+  return editingProfile ? "Guardar cambios ↗" : "Enviar para revisión ↗";
 }
 
 async function openProfile() {
   if (!await requireAuth()) return;
+  if (!currentUser) return;
+  const userId = currentUser.id;
+  const expectedAuthVersion = authStateVersion;
   editingProfile = null;
+  setProfileFormDisabled(false);
   profileForm.reset();
   $("#profile-title").textContent = "Publica tu servicio.";
+  profileForm.querySelector('[type="submit"]').textContent = profileSubmitLabel();
   $("#profile-message").textContent = "Cargando tu perfil…";
   openDialog(profileDialog);
-  let data;
-  try {
-    const result = await supabase.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
-    if (result.error) {
-      $("#profile-message").textContent = friendlyError(result.error, "No se pudo cargar tu perfil.");
-      return;
-    }
-    data = result.data;
-  } catch {
-    $("#profile-message").textContent = "No se pudo cargar tu perfil. Comprueba tu conexión e inténtalo de nuevo.";
+  const { profile, error, stale } = await refreshOwnProfile(userId);
+  if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) {
     return;
   }
-  if (data) {
-    editingProfile = data;
-    $("#profile-title").textContent = "Edita tu servicio.";
-    for (const field of ["name", "category_id", "locality", "description", "phone", "whatsapp", "website"]) {
-      const input = profileForm.elements.namedItem(field);
-      if (input) input.value = data[field] || "";
-    }
-    $("#profile-show-phone").checked = Boolean(data.show_phone);
-    $("#profile-show-whatsapp").checked = Boolean(data.show_whatsapp);
+  if (stale) {
+    $("#profile-message").textContent = "El estado de tu perfil se está actualizando. Vuelve a abrir Mi cuenta.";
+    return;
   }
-  $("#profile-message").textContent = "";
+  if (error) {
+    $("#profile-message").textContent = friendlyError(error, "No se pudo cargar tu perfil. Comprueba tu conexión e inténtalo de nuevo.");
+    return;
+  }
+  if (profile) {
+    editingProfile = profile;
+    $("#profile-title").textContent = "Edita tu servicio.";
+    profileForm.querySelector('[type="submit"]').textContent = profileSubmitLabel();
+    populateProfileForm(profile);
+    if (profile.status === "rejected") {
+      setProfileFormDisabled(true);
+      $("#profile-message").textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
+    }
+  } else {
+    $("#profile-message").textContent = "";
+  }
 }
 
 async function saveProfile(event) {
   event.preventDefault();
   const message = $("#profile-message");
   message.textContent = "";
+  if (editingProfile?.status === "rejected") {
+    message.textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
+    return;
+  }
   if (!profileForm.reportValidity()) return;
   const photo = $("#profile-photo").files[0];
   if (photo) {
@@ -253,20 +426,24 @@ async function saveProfile(event) {
     }
   }
   if (!await requireAuth()) return;
+  if (!currentUser) return;
+  const expectedAuthVersion = authStateVersion;
   const submitButton = profileForm.querySelector('[type="submit"]');
   setBusy(submitButton, true, "Guardando…");
+  const userId = currentUser.id;
   try {
     let photoUrl = editingProfile?.photo_url || null;
     if (photo) {
       const ext = photo.type === "image/jpeg" ? "jpg" : photo.type.split("/")[1];
-      const path = `${currentUser.id}/${crypto.randomUUID()}.${ext}`;
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("service-photos").upload(path, photo, { contentType: photo.type, upsert: false });
       if (uploadError) throw uploadError;
+      if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
       const { data: { publicUrl } } = supabase.storage.from("service-photos").getPublicUrl(path);
       photoUrl = publicUrl;
     }
     const payload = {
-      id: currentUser.id,
+      id: userId,
       name: $("#profile-name").value.trim(),
       category_id: $("#profile-category").value,
       locality: $("#profile-locality").value.trim(),
@@ -277,19 +454,40 @@ async function saveProfile(event) {
       show_whatsapp: $("#profile-show-whatsapp").checked,
       website: $("#profile-website").value.trim() || null,
       photo_url: photoUrl,
-      status: "pending",
       updated_at: new Date().toISOString(),
     };
+    if (!editingProfile) payload.status = "pending";
     const { error } = await supabase.from("profiles").upsert(payload);
     if (error) throw error;
-    message.textContent = "Tu perfil se envió para revisión. Te avisaremos cuando esté publicado.";
-    profileForm.reset();
-    editingProfile = null;
-    window.setTimeout(() => profileDialog.close(), 2200);
+    if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
+    const { profile, error: refreshError, stale } = await refreshOwnProfile(userId);
+    if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
+    if (refreshError) {
+      message.textContent = "Guardamos tu perfil, pero no pudimos actualizar el estado. Intenta actualizar la página.";
+      return;
+    }
+    if (stale) {
+      message.textContent = "Guardamos tu perfil, pero su estado se está actualizando. Vuelve a consultar Mi cuenta.";
+      return;
+    }
+    if (!profile) {
+      message.textContent = "Guardamos tu perfil, pero no pudimos encontrar el registro para mostrar su estado.";
+      return;
+    }
+    editingProfile = profile;
+    populateProfileForm(profile);
+    message.textContent = "Tu perfil se guardó correctamente.";
+    window.setTimeout(() => {
+      if (profileDialog.open) profileDialog.close();
+    }, 2200);
   } catch (error) {
-    message.textContent = friendlyError(error, "No se pudo guardar el perfil. Revisa tu conexión e inténtalo de nuevo.");
+    if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      message.textContent = friendlyError(error, "No se pudo guardar el perfil. Revisa tu conexión e inténtalo de nuevo.");
+    }
   } finally {
-    setBusy(submitButton, false, "Enviar para revisión ↗");
+    if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      setBusy(submitButton, false, profileSubmitLabel());
+    }
   }
 }
 
@@ -309,9 +507,66 @@ async function signInWithGoogle() {
   }
 }
 
+async function signOut() {
+  const button = $("#nav-sign-out");
+  setBusy(button, true, "Cerrando sesión…");
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } catch (error) {
+    showNotice(friendlyError(error, "No se pudo cerrar la sesión. Inténtalo de nuevo."), "error");
+  } finally {
+    setBusy(button, false, "Cerrar sesión");
+  }
+}
+
+function initializeAuth() {
+  if (!supabase) {
+    updateAuthNavigation();
+    renderAccountStatus(null);
+    resolveAuthStateReady();
+    return;
+  }
+  if (authSubscription) return;
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const previousUserId = currentUser?.id;
+    currentUser = session?.user || null;
+    updateAuthNavigation();
+    resolveAuthStateReady();
+
+    if (!currentUser) {
+      if (previousUserId) clearAuthScopedUi();
+      authStateVersion += 1;
+      profileRequestVersion += 1;
+      renderAccountStatus(null);
+      return;
+    }
+
+    if (previousUserId && previousUserId !== currentUser.id) {
+      clearAuthScopedUi();
+    }
+    const refreshProfile = previousUserId !== currentUser.id
+      || ["INITIAL_SESSION", "SIGNED_IN", "USER_UPDATED"].includes(event);
+    if (!refreshProfile) return;
+
+    authStateVersion += 1;
+    const userId = currentUser.id;
+    const expectedAuthVersion = authStateVersion;
+    renderAccountStatus(undefined);
+    queueMicrotask(() => {
+      void refreshOwnProfile(userId, expectedAuthVersion);
+    });
+  });
+  authSubscription = subscription;
+}
+
 async function openAdmin() {
   const content = $("#admin-content");
   if (!supabase || !await requireAuth()) return;
+  if (!currentUser) return;
+  const userId = currentUser.id;
+  const expectedAuthVersion = authStateVersion;
   if (currentUser.app_metadata?.role !== "admin") {
     showAuth("No tienes permisos para acceder al panel de administración.");
     return;
@@ -321,6 +576,7 @@ async function openAdmin() {
   try {
     const { data, error } = await supabase.from("profiles").select("id,name,category_id,locality,description").eq("status", "pending").order("created_at");
     if (error) throw error;
+    if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
     if (!data?.length) {
       content.textContent = "No hay perfiles pendientes.";
       return;
@@ -331,19 +587,28 @@ async function openAdmin() {
       <div class="admin-actions"><button type="button" data-review="${escapeHTML(profile.id)}" data-status="approved">Aprobar</button><button type="button" data-review="${escapeHTML(profile.id)}" data-status="rejected">Rechazar</button></div>
     </article>`).join("");
   } catch (error) {
-    content.textContent = friendlyError(error, "No se pudieron cargar las solicitudes.");
+    if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      content.textContent = friendlyError(error, "No se pudieron cargar las solicitudes.");
+    }
   }
 }
 
 async function reviewProfile(id, status) {
+
+  if (!["approved", "rejected"].includes(status)) return;
+  const userId = currentUser?.id;
+  const expectedAuthVersion = authStateVersion;
   try {
     const { error } = await supabase.from("profiles").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
+    if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
     await openAdmin();
   } catch (error) {
-    $("#admin-content").prepend(Object.assign(document.createElement("p"), {
-      className: "form-message", textContent: friendlyError(error, "No fue posible actualizar el perfil."),
-    }));
+    if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      $("#admin-content").prepend(Object.assign(document.createElement("p"), {
+        className: "form-message", textContent: friendlyError(error, "No fue posible actualizar el perfil."),
+      }));
+    }
   }
 }
 
@@ -396,6 +661,9 @@ document.querySelectorAll("[data-open-auth]").forEach((el) => el.addEventListene
   showAuth();
 }));
 document.querySelectorAll("[data-open-profile]").forEach((el) => el.addEventListener("click", openProfile));
+$("#nav-account").addEventListener("click", openProfile);
+$("#nav-sign-out").addEventListener("click", signOut);
+$("#account-status-action").addEventListener("click", openAccountAction);
 $("#google-login").addEventListener("click", signInWithGoogle);
 profileForm.addEventListener("submit", saveProfile);
 $("#admin-content").addEventListener("click", (event) => {
@@ -430,14 +698,7 @@ document.querySelectorAll("dialog").forEach((dialog) => {
 window.openServicesAdmin = openAdmin;
 $("#current-year").textContent = new Date().getFullYear();
 initMenu();
-
-if (supabase) {
-  supabase.auth.getUser().then(({ data, error }) => {
-    if (!error) currentUser = data.user;
-  }).catch(() => {
-    showNotice("No fue posible verificar tu sesión. Algunas acciones podrían requerir que vuelvas a iniciar sesión.", "error");
-  });
-}
+initializeAuth();
 loadCategories().then(loadServices).catch(() => {
   showNotice("No fue posible conectar con el directorio. Intenta actualizar la página.", "error");
 });
