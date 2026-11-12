@@ -72,7 +72,7 @@ function showAccountStatus({
   const wrapper = $("#account-status-wrap");
   const status = $("#account-status");
   const action = $("#account-status-action");
-  status.className = `notice notice-${type}`;
+  status.className = `account-status notice notice-${type}`;
   $("#account-state").textContent = state;
   $("#account-status-message").textContent = message;
   $("#account-status-badge").textContent = badge;
