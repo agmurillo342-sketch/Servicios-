@@ -144,7 +144,6 @@ h2 { margin-bottom: 0; font-size: clamp(36px, 4vw, 49px); line-height: 1.15; fon
 .community-banner { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; min-height: 278px; padding: 60px max(calc((100vw - 1200px)/2), 7vw); overflow: hidden; color: white; background: var(--green-dark); }
 .community-banner .eyebrow { color: #c3d9aa; }.community-banner h2 { font-size: clamp(35px, 4vw, 46px); }
 .community-cta { max-width: 380px; justify-self: end; }.community-cta p { margin-bottom: 22px; color: #d2ddd1; font-size: 13px; line-height: 1.8; }
-.community-doodle { position: absolute; top: 20px; right: 12%; color: #54755b; font-size: 180px; line-height: 1; }
 .site-footer { display: grid; grid-template-columns: 1fr 1.2fr 1fr auto; gap: 18px; align-items: center; min-height: 110px; max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
 .brand-footer { font-size: 14px; }.brand-footer .brand-mark { width: 29px; height: 29px; font-size: 19px; }
 .site-footer p, .copyright { margin: 0; color: #788176; font-size: 10px; }.site-footer nav { display: flex; gap: 19px; font-size: 10px; }
@@ -219,7 +218,7 @@ h2 { margin-bottom: 0; font-size: clamp(36px, 4vw, 49px); line-height: 1.15; fon
   .search-panel { grid-template-columns: 1fr; }.search-field { padding: 0 10px; }.search-category { border-bottom: 0; }.search-button { grid-column: auto; }
   .directory-toolbar { align-items: flex-start; gap: 10px; flex-direction: column; padding: 23px 0 15px; }.directory-actions { width: 100%; justify-content: space-between; }
   .service-grid { grid-template-columns: 1fr; gap: 14px; }.card-image { height: 205px; }
-  .community-banner { display: block; min-height: auto; padding: 56px 24px; }.community-banner h2 { font-size: 38px; }.community-cta { margin-top: 24px; }.community-doodle { top: 30px; right: 5px; font-size: 120px; }
+  .community-banner { display: block; min-height: auto; padding: 56px 24px; }.community-banner h2 { font-size: 38px; }.community-cta { margin-top: 24px; }
   .site-footer { grid-template-columns: 1fr 1fr; gap: 16px 8px; }.site-footer nav { gap: 12px; }.copyright { text-align: right; }
   .site-dialog { padding: 29px 22px; }.site-dialog h2 { font-size: 27px; }.form-two-col { grid-template-columns: 1fr; gap: 5px; }
 }

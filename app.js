@@ -16,6 +16,7 @@ const profileForm = $("#profile-form");
 const categoryCache = new Map();
 let searchTimer;
 let currentUser = null;
+let currentProfile = null;
 let authStateVersion = 0;
 let profileRequestVersion = 0;
 let authSubscription = null;
@@ -40,8 +41,25 @@ function showNotice(message, type = "info") {
 function updateAuthNavigation() {
   const signedIn = Boolean(currentUser);
   $("[data-open-auth]").hidden = signedIn;
-  $("#nav-account").hidden = !signedIn;
   $("#nav-sign-out").hidden = !signedIn;
+  document.querySelectorAll("[data-open-profile]").forEach((button) => {
+    button.hidden = signedIn && currentProfile !== null;
+  });
+  const loadingProfile = signedIn && currentProfile === undefined;
+  $("#community-banner-title").textContent = !currentProfile
+    ? loadingProfile ? "Consultando el estado de tu perfil." : "¿Tienes un servicio que compartir?"
+    : currentProfile.status === "approved"
+    ? "Tu servicio ya está en el directorio."
+    : currentProfile.status === "rejected"
+    ? "Consulta el estado de tu perfil."
+    : "Ya recibimos tu solicitud.";
+  $("#community-cta-message").textContent = !currentProfile
+    ? loadingProfile ? "Estamos consultando tu servicio." : "Haz que más personas te encuentren. Publica tu perfil gratis y conecta con tu comunidad."
+    : currentProfile.status === "approved"
+    ? "Puedes revisar o editar tu servicio desde Cuenta."
+    : currentProfile.status === "rejected"
+    ? "Tu perfil fue rechazado. Consulta los detalles desde Cuenta."
+    : "Ya enviaste tu perfil. Consulta el estado o edítalo desde Cuenta.";
 }
 
 function clearAuthScopedUi() {
@@ -84,6 +102,8 @@ function showAccountStatus({
 }
 
 function renderAccountStatus(profile) {
+  currentProfile = profile;
+  updateAuthNavigation();
   if (!currentUser) {
     showAccountStatus({
       state: "Sin sesión",
@@ -113,6 +133,7 @@ function renderAccountStatus(profile) {
       message: "Tu perfil está pendiente de revisión",
       badge: "Pending",
       description: "Tu solicitud fue recibida. Podrás aparecer en el directorio cuando sea aprobada.",
+      actionLabel: "Editar mi servicio",
     });
     return;
   }
@@ -121,6 +142,7 @@ function renderAccountStatus(profile) {
       state: "Sesión activa",
       message: "Tu perfil ha sido aprobado",
       badge: "Approved",
+      actionLabel: "Editar mi servicio",
     });
     return;
   }
@@ -385,7 +407,7 @@ async function openProfile() {
     return;
   }
   if (stale) {
-    $("#profile-message").textContent = "El estado de tu perfil se está actualizando. Vuelve a abrir Mi cuenta.";
+    $("#profile-message").textContent = "El estado de tu perfil se está actualizando. Vuelve a abrir Cuenta.";
     return;
   }
   if (error) {
@@ -465,7 +487,7 @@ async function saveProfile(event) {
       return;
     }
     if (stale) {
-      message.textContent = "Guardamos tu perfil, pero su estado se está actualizando. Vuelve a consultar Mi cuenta.";
+      message.textContent = "Guardamos tu perfil, pero su estado se está actualizando. Vuelve a consultar Cuenta.";
       return;
     }
     if (!profile) {
@@ -681,7 +703,6 @@ document.querySelectorAll("[data-open-auth]").forEach((el) => el.addEventListene
   showAuth();
 }));
 document.querySelectorAll("[data-open-profile]").forEach((el) => el.addEventListener("click", openProfile));
-$("#nav-account").addEventListener("click", openProfile);
 $("#nav-sign-out").addEventListener("click", signOut);
 $("#account-status-action").addEventListener("click", openAccountAction);
 $("#google-login").addEventListener("click", signInWithGoogle);
