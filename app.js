@@ -69,7 +69,6 @@ function showAccountStatus({
   type = "info",
   actionLabel = "",
 } = {}) {
-  const wrapper = $("#account-status-wrap");
   const status = $("#account-status");
   const action = $("#account-status-action");
   status.className = `account-status notice notice-${type}`;
@@ -80,7 +79,6 @@ function showAccountStatus({
   $("#account-status-description").textContent = description;
   $("#account-status-description").hidden = !description;
   status.hidden = false;
-  wrapper.hidden = false;
   action.hidden = !actionLabel;
   action.textContent = actionLabel;
 }
@@ -615,6 +613,22 @@ async function reviewProfile(id, status) {
 function initMenu() {
   const toggle = $(".menu-toggle");
   const nav = $("#primary-nav");
+  const accountToggle = $("#account-status-toggle");
+  const accountPanel = $("#account-status-wrap");
+  const closeAccountPanel = () => {
+    accountPanel.hidden = true;
+    accountToggle.setAttribute("aria-expanded", "false");
+  };
+
+  accountToggle.addEventListener("click", () => {
+    const expanded = accountToggle.getAttribute("aria-expanded") === "true";
+    accountToggle.setAttribute("aria-expanded", String(!expanded));
+    accountPanel.hidden = expanded;
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".account-menu")) closeAccountPanel();
+  });
+
   toggle.addEventListener("click", () => {
     const expanded = toggle.getAttribute("aria-expanded") === "true";
     toggle.setAttribute("aria-expanded", String(!expanded));
@@ -622,7 +636,8 @@ function initMenu() {
     nav.classList.toggle("nav-open", !expanded);
   });
   nav.addEventListener("click", (event) => {
-    if (event.target.closest("a, button")) {
+    if (event.target.closest("#account-status-action")) closeAccountPanel();
+    if (event.target.closest("a") || (event.target.closest("button") && !event.target.closest("#account-status-toggle"))) {
       nav.classList.remove("nav-open");
       toggle.setAttribute("aria-expanded", "false");
       toggle.setAttribute("aria-label", "Abrir menú");
@@ -630,10 +645,15 @@ function initMenu() {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      nav.classList.remove("nav-open");
-      toggle.setAttribute("aria-expanded", "false");
-      toggle.setAttribute("aria-label", "Abrir menú");
-      toggle.focus();
+      if (!accountPanel.hidden) {
+        closeAccountPanel();
+        accountToggle.focus();
+      } else if (nav.classList.contains("nav-open")) {
+        nav.classList.remove("nav-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "Abrir menú");
+        toggle.focus();
+      }
     }
   });
 }

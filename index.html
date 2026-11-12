@@ -27,25 +27,34 @@
     <nav id="primary-nav" class="primary-nav" aria-label="Navegación principal">
       <a href="#directorio">Explorar</a>
       <a href="#como-funciona">Cómo funciona</a>
+      <div class="account-menu">
+        <button id="account-status-toggle" class="account-menu-toggle" type="button" aria-label="Estado de cuenta" aria-expanded="false" aria-controls="account-status-wrap">
+          <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="6.5" r="3" stroke="currentColor" stroke-width="1.5"></circle>
+            <path d="M4.5 16c.6-2.5 2.5-3.8 5.5-3.8s4.9 1.3 5.5 3.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+          </svg>
+          <span>Cuenta</span>
+          <span class="account-menu-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div id="account-status-wrap" class="account-menu-panel" role="region" aria-labelledby="account-status-heading" hidden>
+          <div id="account-status" class="account-status notice notice-info">
+            <div class="account-status-copy">
+              <p id="account-status-heading" class="account-status-label">Estado de la cuenta</p>
+              <p id="account-state" class="account-state" role="status" aria-live="polite"></p>
+              <p id="account-status-message" class="account-status-message"></p>
+              <span id="account-status-badge" class="account-status-badge" hidden></span>
+              <p id="account-status-description" class="account-status-description" hidden></p>
+            </div>
+            <button id="account-status-action" class="button button-dark button-small" type="button" hidden></button>
+          </div>
+        </div>
+      </div>
       <a class="nav-login" href="#acceso" data-open-auth>Iniciar sesión</a>
       <button id="nav-account" class="text-button" type="button" hidden>Mi cuenta</button>
       <button id="nav-sign-out" class="text-button" type="button" hidden>Cerrar sesión</button>
       <button class="button button-small button-dark" type="button" data-open-profile>Publica tu servicio <span aria-hidden="true">↗</span></button>
     </nav>
   </header>
-
-  <div id="account-status-wrap" class="account-status-wrap" hidden>
-    <div id="account-status" class="account-status notice notice-info">
-      <div class="account-status-copy">
-        <p class="account-status-label">Estado de la cuenta</p>
-        <p id="account-state" class="account-state" role="status" aria-live="polite"></p>
-        <p id="account-status-message" class="account-status-message"></p>
-        <span id="account-status-badge" class="account-status-badge" hidden></span>
-        <p id="account-status-description" class="account-status-description" hidden></p>
-      </div>
-      <button id="account-status-action" class="button button-dark button-small" type="button" hidden></button>
-    </div>
-  </div>
 
   <main>
     <section class="hero" aria-labelledby="hero-title">
