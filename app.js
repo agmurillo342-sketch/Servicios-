@@ -40,7 +40,9 @@ function showNotice(message, type = "info") {
 
 function updateAuthNavigation() {
   const signedIn = Boolean(currentUser);
+  const isAdmin = currentUser?.app_metadata?.role === "admin";
   $("[data-open-auth]").hidden = signedIn;
+  $("#nav-admin").hidden = !isAdmin;
   $("#nav-sign-out").hidden = !signedIn;
   document.querySelectorAll("[data-open-profile]").forEach((button) => {
     button.hidden = signedIn && currentProfile !== null;
@@ -614,7 +616,11 @@ async function openAdmin() {
 }
 
 async function reviewProfile(id, status) {
-
+  if (!supabase || !await requireAuth()) return;
+  if (!currentUser || currentUser.app_metadata?.role !== "admin") {
+    showAuth("No tienes permisos para revisar perfiles.");
+    return;
+  }
   if (!["approved", "rejected"].includes(status)) return;
   const userId = currentUser?.id;
   const expectedAuthVersion = authStateVersion;
@@ -703,6 +709,7 @@ document.querySelectorAll("[data-open-auth]").forEach((el) => el.addEventListene
   showAuth();
 }));
 document.querySelectorAll("[data-open-profile]").forEach((el) => el.addEventListener("click", openProfile));
+$("#nav-admin").addEventListener("click", openAdmin);
 $("#nav-sign-out").addEventListener("click", signOut);
 $("#account-status-action").addEventListener("click", openAccountAction);
 $("#google-login").addEventListener("click", signInWithGoogle);
