@@ -14,6 +14,12 @@ interface PhotoHandlerConfig {
   fetcher?: typeof fetch;
 }
 
+interface SecretKeyPhotoHandlerConfig {
+  supabaseUrl: string;
+  secretKeys: string | undefined;
+  fetcher?: typeof fetch;
+}
+
 function responseHeaders(contentType = "text/plain; charset=utf-8"): Headers {
   return new Headers({
     "Access-Control-Allow-Origin": "*",
@@ -26,6 +32,33 @@ function responseHeaders(contentType = "text/plain; charset=utf-8"): Headers {
 
 function errorResponse(status: number, message: string): Response {
   return new Response(message, { status, headers: responseHeaders() });
+}
+
+export function getDefaultSecretKey(
+  secretKeys: string | undefined,
+): string | null {
+  if (!secretKeys) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(secretKeys);
+  } catch {
+    return null;
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !("default" in parsed)
+  ) {
+    return null;
+  }
+
+  const defaultKey = parsed.default;
+  return typeof defaultKey === "string" && defaultKey.trim() !== ""
+    ? defaultKey
+    : null;
 }
 
 export function createPhotoHandler(
@@ -47,7 +80,6 @@ export function createPhotoHandler(
     const profileId = profileIds[0].toLowerCase();
     const authorizationHeaders = {
       apikey: config.serviceRoleKey,
-      Authorization: `Bearer ${config.serviceRoleKey}`,
     };
     const profileUrl = new URL("/rest/v1/profiles", config.supabaseUrl);
     profileUrl.searchParams.set("id", `eq.${profileId}`);
@@ -121,12 +153,33 @@ export function createPhotoHandler(
   };
 }
 
-if (import.meta.main) {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
+export function createPhotoHandlerFromSecretKeys(
+  config: SecretKeyPhotoHandlerConfig,
+): (request: Request) => Promise<Response> {
+  const serviceRoleKey = getDefaultSecretKey(config.secretKeys);
+  if (!serviceRoleKey) {
+    console.error("SUPABASE_SECRET_KEYS is missing or invalid.");
+    return () =>
+      Promise.resolve(
+        errorResponse(500, "Photo service configuration error"),
+      );
   }
 
-  Deno.serve(createPhotoHandler({ supabaseUrl, serviceRoleKey }));
+  return createPhotoHandler({
+    supabaseUrl: config.supabaseUrl,
+    serviceRoleKey,
+    fetcher: config.fetcher,
+  });
+}
+
+if (import.meta.main) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  if (!supabaseUrl) {
+    throw new Error("SUPABASE_URL is required.");
+  }
+
+  Deno.serve(createPhotoHandlerFromSecretKeys({
+    supabaseUrl,
+    secretKeys: Deno.env.get("SUPABASE_SECRET_KEYS"),
+  }));
 }
