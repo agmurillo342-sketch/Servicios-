@@ -1,0 +1,2 @@
+[functions.profile-photo]
+verify_jwt = false

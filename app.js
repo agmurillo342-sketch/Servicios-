@@ -32,6 +32,13 @@ const escapeHTML = (value = "") => String(value).replace(/[&<>"']/g, (char) => (
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[char]));
 
+function profilePhotoUrl(profileId) {
+  if (!isConfigured || !profileId) return "";
+  const url = new URL("/functions/v1/profile-photo", SUPABASE_URL);
+  url.searchParams.set("profile_id", profileId);
+  return url.href;
+}
+
 function showNotice(message, type = "info") {
   directoryNotice.textContent = message;
   directoryNotice.className = `notice notice-${type}`;
@@ -40,21 +47,22 @@ function showNotice(message, type = "info") {
 
 function updateAuthNavigation() {
   const signedIn = Boolean(currentUser);
+  const isAdmin = currentUser?.app_metadata?.role === "admin";
   $("[data-open-auth]").hidden = signedIn;
+  $("#nav-admin").hidden = !isAdmin;
   $("#nav-sign-out").hidden = !signedIn;
   document.querySelectorAll("[data-open-profile]").forEach((button) => {
     button.hidden = signedIn && currentProfile !== null;
   });
-  const loadingProfile = signedIn && currentProfile === undefined;
   $("#community-banner-title").textContent = !currentProfile
-    ? loadingProfile ? "Consultando el estado de tu perfil." : "¿Tienes un servicio que compartir?"
+    ? "¿Tienes un servicio que compartir?"
     : currentProfile.status === "approved"
     ? "Tu servicio ya está en el directorio."
     : currentProfile.status === "rejected"
     ? "Consulta el estado de tu perfil."
     : "Ya recibimos tu solicitud.";
   $("#community-cta-message").textContent = !currentProfile
-    ? loadingProfile ? "Estamos consultando tu servicio." : "Haz que más personas te encuentren. Publica tu perfil gratis y conecta con tu comunidad."
+    ? "Haz que más personas te encuentren. Publica tu perfil gratis y conecta con tu comunidad."
     : currentProfile.status === "approved"
     ? "Puedes revisar o editar tu servicio desde Cuenta."
     : currentProfile.status === "rejected"
@@ -212,8 +220,9 @@ function showServiceDetails(id) {
     service.show_whatsapp && service.whatsapp ? `<a class="button button-dark" href="https://wa.me/${escapeHTML(service.whatsapp.replace(/\D/g, ""))}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : "",
     service.website && /^https?:\/\//i.test(service.website) ? `<a class="button button-light" href="${escapeHTML(service.website)}" target="_blank" rel="noopener noreferrer">Visitar sitio ↗</a>` : "",
   ].filter(Boolean).join("");
-  const image = service.photo_url
-    ? `<img class="detail-image" src="${escapeHTML(service.photo_url)}" alt="">`
+  const photoUrl = service.photo_path ? profilePhotoUrl(service.id) : "";
+  const image = photoUrl
+    ? `<img class="detail-image" src="${escapeHTML(photoUrl)}" alt="">`
     : `<div class="detail-image detail-placeholder" aria-hidden="true">${escapeHTML((service.name || "S").charAt(0).toUpperCase())}</div>`;
   $("#service-detail-content").innerHTML = `${image}<p class="eyebrow">${escapeHTML(category)} · ${escapeHTML(service.locality)}</p>
     <h2 id="service-detail-title">${escapeHTML(service.name)}</h2><p class="detail-description">${escapeHTML(service.description)}</p>
@@ -268,8 +277,9 @@ function renderCards(services) {
   serviceList.innerHTML = services.map((service) => {
     const category = categoryCache.get(service.category_id) || "Servicio local";
     const initial = escapeHTML((service.name || "S").trim().charAt(0).toUpperCase());
-    const image = service.photo_url
-      ? `<img src="${escapeHTML(service.photo_url)}" alt="" loading="lazy">`
+    const photoUrl = service.photo_path ? profilePhotoUrl(service.id) : "";
+    const image = photoUrl
+      ? `<img src="${escapeHTML(photoUrl)}" alt="" loading="lazy">`
       : `<span class="service-initial" aria-hidden="true">${initial}</span>`;
     return `<article class="service-card" tabindex="0" role="button" aria-haspopup="dialog" data-service-id="${escapeHTML(service.id)}" aria-label="Ver perfil de ${escapeHTML(service.name)}, ${escapeHTML(category)} en ${escapeHTML(service.locality)}">
       <div class="card-image">${image}<span class="card-category">${escapeHTML(category)}</span></div>
@@ -321,7 +331,7 @@ async function loadServices() {
   const locality = $("#search-locality").value.trim();
   const category = $("#search-category").value;
   try {
-    let request = supabase.from("public_services").select("id,name,category_id,locality,description,phone,whatsapp,show_phone,show_whatsapp,website,photo_url,created_at");
+    let request = supabase.from("public_services").select("id,name,category_id,locality,description,phone,whatsapp,show_phone,show_whatsapp,website,photo_path,created_at");
     if (query) {
       const safeQuery = query.replace(/[,%()"'\\]/g, " ");
       request = request.or(`name.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%`);
@@ -452,15 +462,14 @@ async function saveProfile(event) {
   setBusy(submitButton, true, "Guardando…");
   const userId = currentUser.id;
   try {
-    let photoUrl = editingProfile?.photo_url || null;
+    let photoPath = editingProfile?.photo_path || null;
     if (photo) {
       const ext = photo.type === "image/jpeg" ? "jpg" : photo.type.split("/")[1];
       const path = `${userId}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("service-photos").upload(path, photo, { contentType: photo.type, upsert: false });
       if (uploadError) throw uploadError;
       if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
-      const { data: { publicUrl } } = supabase.storage.from("service-photos").getPublicUrl(path);
-      photoUrl = publicUrl;
+      photoPath = path;
     }
     const payload = {
       id: userId,
@@ -473,7 +482,7 @@ async function saveProfile(event) {
       show_phone: $("#profile-show-phone").checked,
       show_whatsapp: $("#profile-show-whatsapp").checked,
       website: $("#profile-website").value.trim() || null,
-      photo_url: photoUrl,
+      photo_path: photoPath,
       updated_at: new Date().toISOString(),
     };
     if (!editingProfile) payload.status = "pending";
@@ -594,7 +603,7 @@ async function openAdmin() {
   openDialog($("#admin-dialog"));
   content.textContent = "Cargando perfiles pendientes…";
   try {
-    const { data, error } = await supabase.from("profiles").select("id,name,category_id,locality,description").eq("status", "pending").order("created_at");
+    const { data, error } = await supabase.from("profiles").select("id,name,category_id,locality,description").eq("status", "pending").neq("id", currentUser.id).order("created_at");
     if (error) throw error;
     if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
     if (!data?.length) {
@@ -614,7 +623,17 @@ async function openAdmin() {
 }
 
 async function reviewProfile(id, status) {
-
+  if (!supabase || !await requireAuth()) return;
+  if (!currentUser || currentUser.app_metadata?.role !== "admin") {
+    showAuth("No tienes permisos para revisar perfiles.");
+    return;
+  }
+  if (id === currentUser?.id) {
+    $("#admin-content").prepend(Object.assign(document.createElement("p"), {
+      className: "form-message", textContent: "No puedes revisar tu propio perfil.",
+    }));
+    return;
+  }
   if (!["approved", "rejected"].includes(status)) return;
   const userId = currentUser?.id;
   const expectedAuthVersion = authStateVersion;
@@ -703,6 +722,7 @@ document.querySelectorAll("[data-open-auth]").forEach((el) => el.addEventListene
   showAuth();
 }));
 document.querySelectorAll("[data-open-profile]").forEach((el) => el.addEventListener("click", openProfile));
+$("#nav-admin").addEventListener("click", openAdmin);
 $("#nav-sign-out").addEventListener("click", signOut);
 $("#account-status-action").addEventListener("click", openAccountAction);
 $("#google-login").addEventListener("click", signInWithGoogle);
