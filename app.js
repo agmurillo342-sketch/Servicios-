@@ -158,7 +158,7 @@ function renderAccountStatus(profile) {
       message: "Tu perfil está pendiente de revisión",
       badge: "Pending",
       description: "Tu solicitud fue recibida. Podrás aparecer en el directorio cuando sea aprobada.",
-      actionLabel: "Editar mi servicio",
+      actionLabel: "Mi perfil",
     });
     return;
   }
@@ -167,7 +167,7 @@ function renderAccountStatus(profile) {
       state: "Sesión activa",
       message: "Tu perfil ha sido aprobado",
       badge: "Approved",
-      actionLabel: "Editar mi servicio",
+      actionLabel: "Mi perfil",
     });
     return;
   }
@@ -176,7 +176,8 @@ function renderAccountStatus(profile) {
       state: "Sesión activa",
       message: "Tu perfil fue rechazado.",
       badge: "Rejected",
-      description: "Revisa tus datos y las indicaciones para corregirlo.",
+      description: "Edita tus datos desde Mi perfil para solicitar una nueva revisión.",
+      actionLabel: "Mi perfil",
     });
     return;
   }
@@ -188,11 +189,43 @@ function renderAccountStatus(profile) {
 }
 
 function openAccountAction() {
-  if (currentUser) {
-    openProfile();
-  } else {
+  if (!currentUser) {
     showAuth();
+  } else if (currentProfile) {
+    void openOwnProfile();
+  } else {
+    void openProfile();
   }
+}
+
+async function openOwnProfile() {
+  if (!await requireAuth() || !currentUser || !currentProfile) return;
+  const profile = currentProfile;
+  const userId = currentUser.id;
+  const expectedAuthVersion = authStateVersion;
+  let signedPhotoUrl = "";
+  if (profile.photo_path) {
+    try {
+      const { data, error } = await supabase.storage
+        .from("service-photos")
+        .createSignedUrl(profile.photo_path, 300);
+      if (error) throw error;
+      if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
+      signedPhotoUrl = data.signedUrl;
+    } catch (error) {
+      if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+        showAccountStatus({
+          state: "Sesión activa",
+          message: friendlyError(error, "No se pudo cargar la fotografía de tu perfil."),
+          type: "error",
+          actionLabel: "Mi perfil",
+        });
+      }
+      return;
+    }
+  }
+  if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
+  showServiceDetails(profile.id, profile, signedPhotoUrl);
 }
 
 async function refreshOwnProfile(userId, expectedAuthVersion = authStateVersion) {
@@ -228,21 +261,48 @@ async function refreshOwnProfile(userId, expectedAuthVersion = authStateVersion)
   }
 }
 
-function showServiceDetails(id) {
-  const service = window.servicesById?.get(id);
+function showServiceDetails(id, profileOverride = null, signedPhotoUrl = "") {
+  const service = profileOverride || window.servicesById?.get(id);
   if (!service) return;
   const category = categoryCache.get(service.category_id) || "Servicio local";
+  const isOwnProfile = currentUser?.id === service.id;
+  const canShowPhone = service.show_phone || isOwnProfile;
+  const canShowWhatsApp = service.show_whatsapp || isOwnProfile;
   const serviceName = escapeHTML(service.name);
   const phone = service.phone?.replace(/[^\d+]/g, "");
   const contactLinks = [
-    service.show_phone && phone ? `<a class="button button-dark" href="tel:${escapeHTML(phone)}">Llamar ↗</a>` : "",
-    service.show_whatsapp && service.whatsapp ? `<a class="button button-dark" href="https://wa.me/${escapeHTML(service.whatsapp.replace(/\D/g, ""))}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : "",
+    canShowPhone && phone ? `<a class="button button-dark" href="tel:${escapeHTML(phone)}">Llamar ↗</a>` : "",
+    canShowWhatsApp && service.whatsapp ? `<a class="button button-dark" href="https://wa.me/${escapeHTML(service.whatsapp.replace(/\D/g, ""))}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : "",
     service.website && /^https?:\/\//i.test(service.website) ? `<a class="button button-light" href="${escapeHTML(service.website)}" target="_blank" rel="noopener noreferrer">Visitar sitio ↗</a>` : "",
   ].filter(Boolean).join("");
-  const photoUrl = service.photo_path ? profilePhotoUrl(service.id) : "";
+  const photoUrl = signedPhotoUrl || (service.photo_path ? profilePhotoUrl(service.id) : "");
   const image = photoUrl
     ? `<img class="detail-image" src="${escapeHTML(photoUrl)}" alt="Fotografía de ${serviceName}">`
     : `<div class="detail-image detail-placeholder" aria-hidden="true">${escapeHTML((service.name || "S").charAt(0).toUpperCase())}</div>`;
+  const profileStatuses = {
+    pending: "Pendiente de revisión",
+    approved: "Aprobado",
+    rejected: "Rechazado; puedes editarlo para solicitar otra revisión",
+  };
+  const profileStatus = isOwnProfile && profileStatuses[service.status]
+    ? `<p class="detail-profile-status">Estado: ${escapeHTML(profileStatuses[service.status])}</p>`
+    : "";
+  const reportAction = isOwnProfile ? "" : `<div class="detail-report">
+    <span>¿Notaste algo que debamos revisar?</span>
+    <button class="text-button" type="button" data-report-profile="${escapeHTML(service.id)}">Reportar perfil</button>
+  </div>`;
+  const ownerActions = isOwnProfile && currentUser?.app_metadata?.role !== "admin"
+    ? `<div class="detail-owner-actions">
+        <button class="button button-dark" type="button" data-edit-own-profile="${escapeHTML(service.id)}">Editar mi perfil</button>
+        <p>Los cambios se enviarán a revisión antes de que tu perfil aparezca en las búsquedas.</p>
+      </div>`
+    : "";
+  const adminActions = currentUser?.app_metadata?.role === "admin"
+    ? `<div class="detail-admin-actions">
+        <button class="button button-danger" type="button" data-delete-profile="${escapeHTML(service.id)}">Eliminar perfil</button>
+        <p id="profile-delete-message" class="form-message" role="status" aria-live="polite"></p>
+      </div>`
+    : "";
   $("#service-detail-content").innerHTML = `<div class="service-detail-layout">
     <main class="service-detail-main">
       <div class="detail-visual">${image}</div>
@@ -250,6 +310,7 @@ function showServiceDetails(id) {
         <p class="eyebrow">${escapeHTML(category)}</p>
         <p class="detail-location"><span aria-hidden="true">⌖</span> ${escapeHTML(service.locality)}</p>
         <h2 id="service-detail-title">${serviceName}</h2>
+        ${profileStatus}
         <h3 class="detail-section-title">Sobre este servicio</h3>
         <p class="detail-description">${escapeHTML(service.description)}</p>
       </div>
@@ -260,14 +321,70 @@ function showServiceDetails(id) {
         <h3 id="detail-contact-title">Conecta directamente</h3>
         <p class="detail-contact-intro">Comunícate con este servicio por los medios disponibles.</p>
         <div class="detail-actions">${contactLinks || '<p class="detail-no-contact">Este perfil no tiene datos de contacto públicos.</p>'}</div>
-        <div class="detail-report">
-          <span>¿Notaste algo que debamos revisar?</span>
-          <button class="text-button" type="button" data-report-profile="${escapeHTML(service.id)}">Reportar perfil</button>
-        </div>
+        ${reportAction}
+        ${ownerActions}
+        ${adminActions}
       </div>
     </aside>
   </div>`;
   openDialog($("#service-dialog"));
+}
+
+async function deleteProfile(id) {
+  if (!supabase || !await requireAuth()) return;
+  if (!currentUser || currentUser.app_metadata?.role !== "admin") {
+    showAuth("Solo las cuentas administrativas pueden eliminar perfiles.");
+    return;
+  }
+  const service = window.servicesById?.get(id);
+  const message = $("#profile-delete-message");
+  if (!service || !message) return;
+  if (!window.confirm(`¿Eliminar permanentemente el perfil de "${service.name}" y sus reportes relacionados? Esta acción no se puede deshacer.`)) return;
+
+  const button = $("#service-detail-content [data-delete-profile]");
+  const userId = currentUser.id;
+  const expectedAuthVersion = authStateVersion;
+  setBusy(button, true, "Eliminando…");
+  let profileDeleted = false;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("No se encontró el perfil para eliminar.");
+    profileDeleted = true;
+
+    let photoCleanupError = null;
+    if (service.photo_path) {
+      const { error: storageError } = await supabase.storage
+        .from("service-photos")
+        .remove([service.photo_path]);
+      photoCleanupError = storageError;
+    }
+
+    $("#service-dialog").close();
+    await loadServices();
+    if (photoCleanupError) {
+      showNotice("El perfil se eliminó, pero no se pudo eliminar su fotografía. Contacta al administrador del sistema.", "error");
+    } else if (resultsSummary.textContent !== "No se pudieron cargar los servicios") {
+      showNotice("El perfil se eliminó correctamente.", "info");
+    }
+  } catch (error) {
+    if (profileDeleted) {
+      $("#service-dialog").close();
+      await loadServices();
+      showNotice("El perfil se eliminó, pero ocurrió un problema al limpiar su fotografía. Contacta al administrador del sistema.", "error");
+    } else if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      message.textContent = friendlyError(error, "No se pudo eliminar el perfil. Inténtalo de nuevo.");
+    }
+  } finally {
+    if ($("#service-dialog").open && currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
+      setBusy(button, false, "Eliminar perfil");
+    }
+  }
 }
 
 function friendlyError(error, fallback) {
@@ -488,6 +605,7 @@ function populateProfileForm(profile) {
 }
 
 function profileSubmitLabel() {
+  if (editingProfile?.status === "rejected") return "Solicitar nueva revisión ↗";
   return editingProfile ? "Guardar cambios ↗" : "Enviar para revisión ↗";
 }
 
@@ -527,8 +645,7 @@ async function openProfile() {
     populateProfileForm(profile);
     setProfileConsentsVisible(false);
     if (profile.status === "rejected") {
-      setProfileFormDisabled(true);
-      $("#profile-message").textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
+      $("#profile-message").textContent = "Actualiza tu perfil para solicitar una nueva revisión.";
     }
   } else {
     setProfileConsentsVisible(true);
@@ -542,10 +659,6 @@ async function saveProfile(event) {
   message.textContent = "";
   if (currentUser?.app_metadata?.role === "admin") {
     message.textContent = "Las cuentas administrativas no pueden publicar ni editar perfiles de servicio.";
-    return;
-  }
-  if (editingProfile?.status === "rejected") {
-    message.textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
     return;
   }
   if (!profileForm.reportValidity()) return;
@@ -593,7 +706,7 @@ async function saveProfile(event) {
       photo_path: photoPath,
       updated_at: new Date().toISOString(),
     };
-    if (!editingProfile) payload.status = "pending";
+    if (!editingProfile || editingProfile.status === "rejected") payload.status = "pending";
     const { error } = await supabase.from("profiles").upsert(payload);
     if (error) throw error;
     if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
@@ -611,12 +724,20 @@ async function saveProfile(event) {
       message.textContent = "Guardamos tu perfil, pero no pudimos encontrar el registro para mostrar su estado.";
       return;
     }
+    if (profile.status !== "approved") {
+      await loadServices();
+      if (currentUser?.id !== userId || expectedAuthVersion !== authStateVersion) return;
+    }
     editingProfile = profile;
     setProfileConsentsVisible(false);
     populateProfileForm(profile);
-    message.textContent = "Tu perfil se guardó correctamente.";
+    message.textContent = profile.status === "pending"
+      ? "Tu perfil se guardó y está pendiente de revisión."
+      : "Tu perfil se guardó correctamente.";
     window.setTimeout(() => {
-      if (profileDialog.open) profileDialog.close();
+      if (!profileDialog.open) return;
+      profileDialog.close();
+      void openOwnProfile();
     }, 2200);
   } catch (error) {
     if (currentUser?.id === userId && expectedAuthVersion === authStateVersion) {
@@ -858,6 +979,17 @@ serviceList.addEventListener("click", (event) => {
   if (button) showServiceDetails(button.dataset.viewService);
 });
 $("#service-detail-content").addEventListener("click", (event) => {
+  const deleteButton = event.target.closest("[data-delete-profile]");
+  if (deleteButton) {
+    void deleteProfile(deleteButton.dataset.deleteProfile);
+    return;
+  }
+  const editButton = event.target.closest("[data-edit-own-profile]");
+  if (editButton) {
+    $("#service-dialog").close();
+    void openProfile();
+    return;
+  }
   const reportButton = event.target.closest("[data-report-profile]");
   if (!reportButton) return;
   reportingProfileId = reportButton.dataset.reportProfile;

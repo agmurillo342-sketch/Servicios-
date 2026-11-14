@@ -22,7 +22,7 @@ Para ejecutar las pruebas locales de la función: `deno test supabase/functions/
 
 ## Administrador
 
-La aplicación reconoce exclusivamente el claim `app_metadata.role = "admin"` del token de Supabase. No usa `user_metadata`, que el propio usuario puede modificar, ni muestra el botón para publicar perfiles a usuarios con ese rol. La política RLS también impide que una cuenta administrativa cree perfiles. Los perfiles enviados antes de asignar el rol se conservan y deben revisarse desde otra cuenta administrativa. Asigna el rol desde un entorno confiable y privilegiado (por ejemplo, el editor de usuarios del Dashboard o una función de servidor protegida), no desde el navegador. No publiques ni incluyas una clave `service_role` en el sitio. Después de asignar el claim, el administrador debe cerrar e iniciar sesión para renovar su token. Los administradores acceden al panel mediante el botón «Administración» de la navegación del sitio.
+La aplicación reconoce exclusivamente el claim `app_metadata.role = "admin"` del token de Supabase. No usa `user_metadata`, que el propio usuario puede modificar, ni muestra el botón para publicar perfiles a usuarios con ese rol. La política RLS también impide que una cuenta administrativa cree perfiles y solo permite que administradores eliminen perfiles y sus fotografías. Los perfiles enviados antes de asignar el rol se conservan y deben revisarse desde otra cuenta administrativa. Asigna el rol desde un entorno confiable y privilegiado (por ejemplo, el editor de usuarios del Dashboard o una función de servidor protegida), no desde el navegador. No publiques ni incluyas una clave `service_role` en el sitio. Después de asignar el claim, el administrador debe cerrar e iniciar sesión para renovar su token. Los administradores acceden al panel mediante el botón «Administración» de la navegación del sitio.
 
 ## Publicación con GitHub y Vercel
 
@@ -32,7 +32,7 @@ El dominio público no está configurado en este repositorio. Cuando se conozca,
 
 ## Qué incluye la versión mejorada
 
-- Directorio adaptable a móvil, búsqueda por texto/localidad/categoría con debounce y envío manual, ordenamiento, limpieza de filtros y reporte de perfiles.
+- Directorio adaptable a móvil, búsqueda por texto/localidad/categoría con debounce y envío manual, ordenamiento, limpieza de filtros y reporte de perfiles. Solo los perfiles aprobados aparecen en las búsquedas; desde «Mi perfil», cada propietario puede consultar su perfil y editarlo para solicitar una revisión.
 - Categorías cargadas de Supabase; formulario accesible para publicar/editar perfiles con validación de datos, mayoría de edad, consentimiento, privacidad de contactos y fotos JPEG/PNG/WebP de hasta 3 MB.
 - Perfiles enviados como pendientes de revisión y panel administrativo con permisos basados en `app_metadata`.
 - Vista de lectura pública limitada a perfiles aprobados y contactos autorizados, control de acceso mediante RLS, páginas legales y página 404.

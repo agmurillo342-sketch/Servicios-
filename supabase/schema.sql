@@ -152,6 +152,11 @@ create policy "Owners update own profile"
     or auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'
   );
 
+drop policy if exists "Admins can delete profiles" on public.profiles;
+create policy "Admins can delete profiles"
+  on public.profiles for delete to authenticated
+  using (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
+
 create or replace function public.prevent_profile_self_approval()
 returns trigger
 language plpgsql
@@ -161,8 +166,14 @@ begin
   if auth.uid() is not null then
     if old.status is distinct from new.status then
       if auth.uid() = old.id or auth.uid() = new.id then
-        raise exception 'Profile owners cannot change their own status.'
-          using errcode = '42501';
+        if old.status = 'rejected'
+          and new.status = 'pending'
+          and (auth.jwt() -> 'app_metadata' ->> 'role') is distinct from 'admin' then
+          null;
+        else
+          raise exception 'Profile owners cannot change their own status.'
+            using errcode = '42501';
+        end if;
       elsif not coalesce(
         auth.jwt() -> 'app_metadata' ->> 'role' = 'admin',
         false
@@ -226,7 +237,7 @@ create policy "Authenticated users can report"
 
 revoke all on public.categories, public.profiles, public.reports from anon, authenticated;
 grant select on public.categories to anon, authenticated;
-grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.profiles to authenticated;
 grant insert on public.reports to authenticated;
 
 create or replace view public.public_services
@@ -282,3 +293,8 @@ drop policy if exists "Users delete photos in their own folder" on storage.objec
 create policy "Users delete photos in their own folder"
   on storage.objects for delete to authenticated
   using (bucket_id = 'service-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Admins delete service photos" on storage.objects;
+create policy "Admins delete service photos"
+  on storage.objects for delete to authenticated
+  using (bucket_id = 'service-photos' and auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
