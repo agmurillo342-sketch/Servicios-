@@ -1,14 +1,17 @@
 # Auditoría de aprobación y publicación de perfiles
 
-Auditoría estática del flujo de aprobación, publicación y fotografías de
-Servicios Locales. No se ejecutó SQL ni se verificó el estado remoto de
-Supabase o de la Edge Function.
+Este documento presenta una auditoría estática del flujo de aprobación,
+publicación y fotografías de Servicios Locales. Posteriormente, se verificó
+el estado remoto de Supabase y el despliegue de la Edge Function
+`profile-photo`. La función se probó exitosamente con una fotografía JPEG de
+un perfil aprobado. Estas comprobaciones no constituyen una auditoría integral
+de seguridad ni abarcan aspectos que no se verificaron.
 
-## Hallazgo identificado
+## Estado del hallazgo
 
-| # | Severidad | Archivo y líneas | Hallazgo | Confianza |
+| # | Estado | Archivo | Hallazgo | Confianza |
 |---|---|---|---|---|
-| 1 | MEDIA | `supabase/schema.sql:146-149` | El propietario de un perfil `approved` puede modificar campos públicos manteniendo `status = 'approved'`. RLS permite ese resultado y el trigger solo bloquea cambios de estado; por tanto, la modificación puede publicarse sin una nueva revisión. | 9/10 |
+| 1 | CORREGIDO EN EL ESQUEMA | `supabase/schema.sql` | El propietario no puede aprobar su propio perfil. Si modifica campos públicos de un perfil aprobado, el trigger lo devuelve a `pending`; la aprobación posterior corresponde a un administrador. | Alta |
 
 ## Administración y aprobaciones
 
@@ -17,8 +20,8 @@ Supabase o de la Edge Function.
 - `openAdmin()` consulta perfiles con `status = 'pending'` y excluye el perfil
   del administrador actual.
 - `reviewProfile()` permite aprobar o rechazar perfiles ajenos. La interfaz
-  bloquea la autoaprobación, pero esta comprobación de cliente es adicional;
-  la protección real debe residir en la base de datos.
+  bloquea la autoaprobación y el trigger de base de datos impide cambiar el
+  estado del perfil propio, incluso mediante una llamada directa a la API.
 - El claim confiable `app_metadata.role` debe asignarse desde un entorno
   privilegiado, nunca desde datos editables por el usuario.
 
@@ -32,23 +35,24 @@ propietarios permite que la fila resultante conserve el estado `pending` o
 
 `public.prevent_profile_self_approval()` se ejecuta cuando cambia `status` y
 rechaza la modificación si el usuario autenticado es propietario del perfil
-anterior o nuevo. Esto impide que un usuario, incluido un administrador,
-cambie el estado de su propio perfil. Los administradores pueden cambiar el
-estado de perfiles ajenos mediante la API, sujeto a RLS.
+anterior o nuevo. Esto impide que un propietario, incluso si es administrador,
+apruebe su propio perfil. Solo un administrador puede cambiar el estado de
+perfiles ajenos, sujeto a RLS.
 
-**Riesgo pendiente:** un propietario puede editar el contenido de un perfil
-aprobado y conservar `approved`. El trigger no bloquea esta operación porque
-el estado no cambia. Los cambios se reflejan inmediatamente en el directorio
-público. Debe definirse una transición a revisión para que los cambios a
-campos publicados no aparezcan antes de una nueva aprobación.
+Cuando el propietario modifica campos públicos de un perfil `approved`, el
+trigger cambia automáticamente su estado a `pending`. El perfil deja de
+aparecer en el directorio público hasta que un administrador lo apruebe de
+nuevo. Esta transición se aplica en la base de datos, no depende solo de la
+interfaz.
 
 ## Hallazgos anteriores y estado actual
 
 Una auditoría anterior encontró lectura pública del bucket de fotografías,
-incluidas fotos de perfiles no aprobados. El esquema actual del repositorio
-configura el bucket como privado y la función `profile-photo` sirve las fotos
-de perfiles aprobados; no se verificó que estas correcciones estén aplicadas
-o desplegadas en el proyecto remoto.
+incluidas fotos de perfiles no aprobados. Ese hallazgo corresponde al estado
+anterior y no describe la configuración actual. El esquema corregido se aplicó
+en Supabase; las verificaciones remotas confirmaron, para el caso probado, la
+entrega de una foto de perfil aprobado mediante `profile-photo`. No se
+verificaron individualmente todas las políticas ni todos los estados de perfil.
 
 También se revisó el riesgo de autoaprobación por parte de un administrador
 que fuera propietario de un perfil. La interfaz excluye el perfil propio y
@@ -67,10 +71,11 @@ WhatsApp se incluyen solo si `show_phone` y `show_whatsapp` están habilitados.
 
 El esquema configura `service-photos` como bucket privado y limita las
 operaciones de escritura a la carpeta del usuario autenticado. La aplicación
-guarda `photo_path`; el código local de `profile-photo` sirve fotos asociadas
-a perfiles aprobados. Esta auditoría no confirma si el esquema fue aplicado,
-si la función está desplegada ni si su configuración de producción permite
-servir las fotografías.
+guarda `photo_path`; la Edge Function `profile-photo` está desplegada. Una
+petición GET remota para una fotografía de un perfil aprobado respondió HTTP
+200 con `Content-Type: image/jpeg` y 47.464 bytes; la firma y la decodificación
+JPEG fueron válidas. Esto confirma el caso probado, no una auditoría integral
+de producción ni el acceso para perfiles pendientes o rechazados.
 
 ## Otros permisos y datos
 
@@ -87,9 +92,20 @@ servir las fotografías.
 
 ## Pruebas recomendadas
 
-1. Como propietario, actualizar un campo público de un perfil aprobado sin
-   cambiar `status`; verificar si la vista refleja el cambio antes de una
-   nueva aprobación.
+### Realizadas
+
+1. `deno test supabase/functions/profile-photo/index_test.ts`: 7 pruebas
+   pasaron y 0 fallaron.
+2. Una petición a `profile-photo` con un ID malformado respondió HTTP 400.
+3. Una petición GET remota para la foto de un perfil aprobado respondió HTTP
+   200 con una imagen JPEG válida de 47.464 bytes.
+
+### Pendientes
+
+1. Como propietario, actualizar un campo público de un perfil aprobado;
+   verificar que el trigger lo devuelva a `pending`, que deje de aparecer en
+   la vista y que solo vuelva a publicarse después de la aprobación de un
+   administrador.
 2. Como propietario, intentar cambiar su propio `status` a `approved`,
    `rejected` y `pending`, incluso mediante llamadas directas a la API; el
    trigger debe rechazar los cambios.
@@ -98,13 +114,14 @@ servir las fotografías.
 4. Consultar `public.public_services` como usuario anónimo con perfiles en los
    tres estados y confirmar que solo aparecen los aprobados y los campos de
    contacto autorizados.
-5. En el proyecto Supabase desplegado, verificar el estado de
-   `profile-photo` y probar lectura sin sesión, como propietario y como
-   visitante para perfiles aprobados, pendientes y rechazados.
+5. Probar la lectura de fotos de perfiles pendientes y rechazados, y los
+   accesos como propietario y visitante para esos estados.
 
 ## Límites de la auditoría
 
-No se ejecutó SQL ni se verificó el proyecto desplegado. La existencia de la
-Edge Function en el repositorio no demuestra que esté desplegada o
-configurada. La prueba previa de API que reportó que no existía
-`public.categories` tampoco equivale a ejecutar o validar el esquema actual.
+No se ejecutó SQL durante esta revisión. Se verificaron el despliegue de
+`profile-photo` y una respuesta exitosa para una foto aprobada, pero no se
+realizó una auditoría integral de producción ni se comprobaron todas las
+políticas RLS, los triggers o la matriz de acceso. La prueba previa de API que
+reportó que no existía `public.categories` tampoco equivale a ejecutar o
+validar el esquema actual.
