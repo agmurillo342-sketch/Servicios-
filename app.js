@@ -52,8 +52,13 @@ function updateAuthNavigation() {
   $("#nav-admin").hidden = !isAdmin;
   $("#nav-sign-out").hidden = !signedIn;
   document.querySelectorAll("[data-open-profile]").forEach((button) => {
-    button.hidden = signedIn && currentProfile !== null;
+    button.hidden = isAdmin || (signedIn && currentProfile !== null);
   });
+  if (isAdmin) {
+    $("#community-banner-title").textContent = "Cuenta administrativa.";
+    $("#community-cta-message").textContent = "Las cuentas administrativas no pueden publicar ni editar perfiles de servicio.";
+    return;
+  }
   $("#community-banner-title").textContent = !currentProfile
     ? "¿Tienes un servicio que compartir?"
     : currentProfile.status === "approved"
@@ -117,6 +122,14 @@ function renderAccountStatus(profile) {
       state: "Sin sesión",
       message: "Inicia sesión con Google para consultar tu perfil.",
       actionLabel: "Iniciar sesión con Google",
+    });
+    return;
+  }
+  if (currentUser.app_metadata?.role === "admin") {
+    showAccountStatus({
+      state: "Cuenta administrativa",
+      message: "Esta cuenta no puede publicar ni editar perfiles de servicio.",
+      description: "Los perfiles enviados antes de asignar el rol se conservan y deben revisarse desde otra cuenta administrativa.",
     });
     return;
   }
@@ -403,6 +416,7 @@ function profileSubmitLabel() {
 async function openProfile() {
   if (!await requireAuth()) return;
   if (!currentUser) return;
+  if (currentUser.app_metadata?.role === "admin") return;
   const userId = currentUser.id;
   const expectedAuthVersion = authStateVersion;
   editingProfile = null;
@@ -442,6 +456,10 @@ async function saveProfile(event) {
   event.preventDefault();
   const message = $("#profile-message");
   message.textContent = "";
+  if (currentUser?.app_metadata?.role === "admin") {
+    message.textContent = "Las cuentas administrativas no pueden publicar ni editar perfiles de servicio.";
+    return;
+  }
   if (editingProfile?.status === "rejected") {
     message.textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
     return;
@@ -457,6 +475,10 @@ async function saveProfile(event) {
   }
   if (!await requireAuth()) return;
   if (!currentUser) return;
+  if (currentUser.app_metadata?.role === "admin") {
+    message.textContent = "Las cuentas administrativas no pueden publicar ni editar perfiles de servicio.";
+    return;
+  }
   const expectedAuthVersion = authStateVersion;
   const submitButton = profileForm.querySelector('[type="submit"]');
   setBusy(submitButton, true, "Guardando…");

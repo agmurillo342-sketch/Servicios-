@@ -137,7 +137,11 @@ create policy "Owners and admins can read profiles"
 drop policy if exists "Owners create pending profiles" on public.profiles;
 create policy "Owners create pending profiles"
   on public.profiles for insert to authenticated
-  with check (auth.uid() = id and status = 'pending');
+  with check (
+    auth.uid() = id
+    and status = 'pending'
+    and (auth.jwt() -> 'app_metadata' ->> 'role') is distinct from 'admin'
+  );
 
 drop policy if exists "Owners update own profile" on public.profiles;
 create policy "Owners update own profile"
