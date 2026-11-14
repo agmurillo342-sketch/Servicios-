@@ -81,6 +81,10 @@ function clearAuthScopedUi() {
     if (dialog.open) dialog.close();
   }
   profileForm.reset();
+  setProfileConsentsVisible(false);
+  updateOtherLocalityVisibility();
+  updatePhoneGroupRequired("phone");
+  updatePhoneGroupRequired("whatsapp");
   setProfileFormDisabled(false);
   editingProfile = null;
   $("#profile-title").textContent = "Publica tu servicio.";
@@ -228,19 +232,41 @@ function showServiceDetails(id) {
   const service = window.servicesById?.get(id);
   if (!service) return;
   const category = categoryCache.get(service.category_id) || "Servicio local";
+  const serviceName = escapeHTML(service.name);
+  const phone = service.phone?.replace(/[^\d+]/g, "");
   const contactLinks = [
-    service.show_phone && service.phone ? `<a class="button button-dark" href="tel:${escapeHTML(service.phone)}">Llamar ↗</a>` : "",
+    service.show_phone && phone ? `<a class="button button-dark" href="tel:${escapeHTML(phone)}">Llamar ↗</a>` : "",
     service.show_whatsapp && service.whatsapp ? `<a class="button button-dark" href="https://wa.me/${escapeHTML(service.whatsapp.replace(/\D/g, ""))}" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>` : "",
     service.website && /^https?:\/\//i.test(service.website) ? `<a class="button button-light" href="${escapeHTML(service.website)}" target="_blank" rel="noopener noreferrer">Visitar sitio ↗</a>` : "",
   ].filter(Boolean).join("");
   const photoUrl = service.photo_path ? profilePhotoUrl(service.id) : "";
   const image = photoUrl
-    ? `<img class="detail-image" src="${escapeHTML(photoUrl)}" alt="">`
+    ? `<img class="detail-image" src="${escapeHTML(photoUrl)}" alt="Fotografía de ${serviceName}">`
     : `<div class="detail-image detail-placeholder" aria-hidden="true">${escapeHTML((service.name || "S").charAt(0).toUpperCase())}</div>`;
-  $("#service-detail-content").innerHTML = `${image}<p class="eyebrow">${escapeHTML(category)} · ${escapeHTML(service.locality)}</p>
-    <h2 id="service-detail-title">${escapeHTML(service.name)}</h2><p class="detail-description">${escapeHTML(service.description)}</p>
-    <div class="detail-actions">${contactLinks || '<p>Este perfil no tiene datos de contacto públicos.</p>'}
-      <button class="text-button" type="button" data-report-profile="${escapeHTML(service.id)}">Reportar perfil</button></div>`;
+  $("#service-detail-content").innerHTML = `<div class="service-detail-layout">
+    <main class="service-detail-main">
+      <div class="detail-visual">${image}</div>
+      <div class="detail-copy">
+        <p class="eyebrow">${escapeHTML(category)}</p>
+        <p class="detail-location"><span aria-hidden="true">⌖</span> ${escapeHTML(service.locality)}</p>
+        <h2 id="service-detail-title">${serviceName}</h2>
+        <h3 class="detail-section-title">Sobre este servicio</h3>
+        <p class="detail-description">${escapeHTML(service.description)}</p>
+      </div>
+    </main>
+    <aside class="service-detail-aside" aria-labelledby="detail-contact-title">
+      <div class="detail-contact-card">
+        <p class="eyebrow">CONTACTO</p>
+        <h3 id="detail-contact-title">Conecta directamente</h3>
+        <p class="detail-contact-intro">Comunícate con este servicio por los medios disponibles.</p>
+        <div class="detail-actions">${contactLinks || '<p class="detail-no-contact">Este perfil no tiene datos de contacto públicos.</p>'}</div>
+        <div class="detail-report">
+          <span>¿Notaste algo que debamos revisar?</span>
+          <button class="text-button" type="button" data-report-profile="${escapeHTML(service.id)}">Reportar perfil</button>
+        </div>
+      </div>
+    </aside>
+  </div>`;
   openDialog($("#service-dialog"));
 }
 
@@ -294,11 +320,11 @@ function renderCards(services) {
     const image = photoUrl
       ? `<img src="${escapeHTML(photoUrl)}" alt="" loading="lazy">`
       : `<span class="service-initial" aria-hidden="true">${initial}</span>`;
-    return `<article class="service-card" tabindex="0" role="button" aria-haspopup="dialog" data-service-id="${escapeHTML(service.id)}" aria-label="Ver perfil de ${escapeHTML(service.name)}, ${escapeHTML(category)} en ${escapeHTML(service.locality)}">
+    return `<article class="service-card">
       <div class="card-image">${image}<span class="card-category">${escapeHTML(category)}</span></div>
       <div class="card-content"><p class="card-location"><span aria-hidden="true">⌖</span> ${escapeHTML(service.locality)}</p>
         <h3>${escapeHTML(service.name)}</h3><p class="card-description">${escapeHTML(service.description)}</p>
-        <div class="card-footer"><span class="card-category-text">${escapeHTML(category)}</span><span class="card-contact" aria-hidden="true">Ver perfil ↗</span></div>
+        <div class="card-footer"><span class="card-category-text">${escapeHTML(category)}</span><button class="card-contact" type="button" data-view-service="${escapeHTML(service.id)}" aria-haspopup="dialog">Ver perfil ↗</button></div>
       </div>
     </article>`;
   }).join("");
@@ -400,11 +426,63 @@ function setProfileFormDisabled(disabled) {
     });
 }
 
+function setProfileConsentsVisible(visible) {
+  $("#profile-consents").hidden = !visible;
+  $("#profile-adult").required = visible;
+  $("#profile-consent").required = visible;
+}
+
+function updateOtherLocalityVisibility() {
+  const isOther = $("#profile-locality").value === "other";
+  const otherLocality = $("#profile-locality-other");
+  otherLocality.hidden = !isOther;
+  otherLocality.required = isOther;
+}
+
+function updatePhoneGroupRequired(name) {
+  const lada = $(`#profile-${name}-lada`);
+  const number = $(`#profile-${name}`);
+  const hasValue = Boolean(lada.value || number.value);
+  lada.required = hasValue;
+  number.required = hasValue;
+}
+
+function keepDigits(input, maxLength) {
+  input.value = input.value.replace(/\D/g, "").slice(0, maxLength);
+}
+
+function populatePhoneFields(name, value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  const nationalNumber = digits.startsWith("52") && [14, 15].includes(digits.length)
+    ? digits.slice(2)
+    : digits;
+  const hasLada = nationalNumber.length === 12 || nationalNumber.length === 13;
+  $(`#profile-${name}-lada`).value = hasLada ? nationalNumber.slice(0, -10) : "";
+  $(`#profile-${name}`).value = nationalNumber.slice(-10);
+  updatePhoneGroupRequired(name);
+}
+
+function phoneValue(name) {
+  const lada = $(`#profile-${name}-lada`).value;
+  const number = $(`#profile-${name}`).value;
+  return number ? `+52 ${lada} ${number}` : null;
+}
+
 function populateProfileForm(profile) {
-  for (const field of ["name", "category_id", "locality", "description", "phone", "whatsapp", "website"]) {
+  for (const field of ["name", "category_id", "description", "website"]) {
     const input = profileForm.elements.namedItem(field);
     if (input) input.value = profile[field] || "";
   }
+  const locality = $("#profile-locality");
+  if ([...locality.options].some((option) => option.value === profile.locality)) {
+    locality.value = profile.locality;
+  } else {
+    locality.value = "other";
+    $("#profile-locality-other").value = profile.locality || "";
+  }
+  updateOtherLocalityVisibility();
+  populatePhoneFields("phone", profile.phone);
+  populatePhoneFields("whatsapp", profile.whatsapp);
   $("#profile-show-phone").checked = Boolean(profile.show_phone);
   $("#profile-show-whatsapp").checked = Boolean(profile.show_whatsapp);
 }
@@ -422,6 +500,10 @@ async function openProfile() {
   editingProfile = null;
   setProfileFormDisabled(false);
   profileForm.reset();
+  setProfileConsentsVisible(false);
+  updateOtherLocalityVisibility();
+  updatePhoneGroupRequired("phone");
+  updatePhoneGroupRequired("whatsapp");
   $("#profile-title").textContent = "Publica tu servicio.";
   profileForm.querySelector('[type="submit"]').textContent = profileSubmitLabel();
   $("#profile-message").textContent = "Cargando tu perfil…";
@@ -443,11 +525,13 @@ async function openProfile() {
     $("#profile-title").textContent = "Edita tu servicio.";
     profileForm.querySelector('[type="submit"]').textContent = profileSubmitLabel();
     populateProfileForm(profile);
+    setProfileConsentsVisible(false);
     if (profile.status === "rejected") {
       setProfileFormDisabled(true);
       $("#profile-message").textContent = "Este perfil rechazado no se puede corregir desde esta interfaz.";
     }
   } else {
+    setProfileConsentsVisible(true);
     $("#profile-message").textContent = "";
   }
 }
@@ -497,10 +581,12 @@ async function saveProfile(event) {
       id: userId,
       name: $("#profile-name").value.trim(),
       category_id: $("#profile-category").value,
-      locality: $("#profile-locality").value.trim(),
+      locality: ($("#profile-locality").value === "other"
+        ? $("#profile-locality-other").value
+        : $("#profile-locality").value).trim(),
       description: $("#profile-description").value.trim(),
-      phone: $("#profile-phone").value.trim() || null,
-      whatsapp: $("#profile-whatsapp").value.trim() || null,
+      phone: phoneValue("phone"),
+      whatsapp: phoneValue("whatsapp"),
       show_phone: $("#profile-show-phone").checked,
       show_whatsapp: $("#profile-show-whatsapp").checked,
       website: $("#profile-website").value.trim() || null,
@@ -526,6 +612,7 @@ async function saveProfile(event) {
       return;
     }
     editingProfile = profile;
+    setProfileConsentsVisible(false);
     populateProfileForm(profile);
     message.textContent = "Tu perfil se guardó correctamente.";
     window.setTimeout(() => {
@@ -749,20 +836,26 @@ $("#nav-sign-out").addEventListener("click", signOut);
 $("#account-status-action").addEventListener("click", openAccountAction);
 $("#google-login").addEventListener("click", signInWithGoogle);
 profileForm.addEventListener("submit", saveProfile);
+$("#profile-locality").addEventListener("change", updateOtherLocalityVisibility);
+for (const name of ["phone", "whatsapp"]) {
+  const lada = $(`#profile-${name}-lada`);
+  const number = $(`#profile-${name}`);
+  lada.addEventListener("input", () => {
+    keepDigits(lada, 3);
+    updatePhoneGroupRequired(name);
+  });
+  number.addEventListener("input", () => {
+    keepDigits(number, 10);
+    updatePhoneGroupRequired(name);
+  });
+}
 $("#admin-content").addEventListener("click", (event) => {
   const button = event.target.closest("[data-review]");
   if (button) reviewProfile(button.dataset.review, button.dataset.status);
 });
 serviceList.addEventListener("click", (event) => {
-  if (event.target.closest("a, button")) return;
-  const card = event.target.closest("[data-service-id]");
-  if (card) showServiceDetails(card.dataset.serviceId);
-});
-serviceList.addEventListener("keydown", (event) => {
-  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-service-id]")) {
-    event.preventDefault();
-    showServiceDetails(event.target.dataset.serviceId);
-  }
+  const button = event.target.closest("[data-view-service]");
+  if (button) showServiceDetails(button.dataset.viewService);
 });
 $("#service-detail-content").addEventListener("click", (event) => {
   const reportButton = event.target.closest("[data-report-profile]");

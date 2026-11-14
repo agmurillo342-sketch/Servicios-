@@ -120,13 +120,41 @@
     <form id="profile-form" novalidate>
       <label for="profile-name">Nombre del servicio <span aria-hidden="true">*</span></label><input id="profile-name" name="name" required maxlength="80" autocomplete="organization">
       <label for="profile-category">Categoría principal <span aria-hidden="true">*</span></label><select id="profile-category" name="category_id" required><option value="">Selecciona una categoría</option></select>
-      <label for="profile-locality">Localidad <span aria-hidden="true">*</span></label><input id="profile-locality" name="locality" required maxlength="80" autocomplete="address-level2">
+      <label for="profile-locality">Localidad <span aria-hidden="true">*</span></label><select id="profile-locality" name="locality" required>
+        <option value="">Selecciona una localidad</option>
+        <option value="Jose Maria Morelos">Jose Maria Morelos</option>
+        <option value="Perula">Perula</option>
+        <option value="CampaCosta">CampaCosta</option>
+        <option value="other">Otra localidad</option>
+      </select>
+      <input id="profile-locality-other" type="text" maxlength="80" autocomplete="address-level2" placeholder="Escribe tu localidad" aria-label="Otra localidad" hidden>
       <label for="profile-description">Cuéntanos qué haces <span aria-hidden="true">*</span></label><textarea id="profile-description" name="description" required minlength="20" maxlength="600" rows="4"></textarea><span class="field-hint">Entre 20 y 600 caracteres.</span>
-      <div class="form-two-col"><div><label for="profile-phone">Teléfono</label><input id="profile-phone" name="phone" type="tel" maxlength="25" autocomplete="tel"><label class="checkbox-label"><input id="profile-show-phone" name="show_phone" type="checkbox" checked> Mostrar teléfono</label></div><div><label for="profile-whatsapp">WhatsApp</label><input id="profile-whatsapp" name="whatsapp" type="tel" maxlength="25"><label class="checkbox-label"><input id="profile-show-whatsapp" name="show_whatsapp" type="checkbox"> Mostrar WhatsApp</label></div></div>
+      <div class="form-two-col">
+        <div>
+          <span class="phone-group-title">Teléfono</span>
+          <div class="phone-fields">
+            <span class="phone-country-code">+52</span>
+            <label for="profile-phone-lada">LADA<input id="profile-phone-lada" type="tel" inputmode="numeric" maxlength="3" pattern="[0-9]{2,3}" title="Escribe una LADA de 2 o 3 dígitos." placeholder="33"></label>
+            <label for="profile-phone">Número (10 dígitos)<input id="profile-phone" name="phone" type="tel" inputmode="numeric" maxlength="25" pattern="[0-9]{10}" title="Escribe exactamente 10 dígitos." placeholder="1234567890" autocomplete="tel-national"></label>
+          </div>
+          <label class="checkbox-label"><input id="profile-show-phone" name="show_phone" type="checkbox" checked> Mostrar teléfono</label>
+        </div>
+        <div>
+          <span class="phone-group-title">WhatsApp</span>
+          <div class="phone-fields">
+            <span class="phone-country-code">+52</span>
+            <label for="profile-whatsapp-lada">LADA<input id="profile-whatsapp-lada" type="tel" inputmode="numeric" maxlength="3" pattern="[0-9]{2,3}" title="Escribe una LADA de 2 o 3 dígitos." placeholder="33"></label>
+            <label for="profile-whatsapp">Número (10 dígitos)<input id="profile-whatsapp" name="whatsapp" type="tel" inputmode="numeric" maxlength="25" pattern="[0-9]{10}" title="Escribe exactamente 10 dígitos." placeholder="1234567890" autocomplete="tel-national"></label>
+          </div>
+          <label class="checkbox-label"><input id="profile-show-whatsapp" name="show_whatsapp" type="checkbox"> Mostrar WhatsApp</label>
+        </div>
+      </div>
       <label for="profile-website">Sitio web (opcional)</label><input id="profile-website" name="website" type="url" maxlength="200" placeholder="https://">
       <label for="profile-photo">Fotografía (JPEG, PNG o WebP; máximo 3 MB)</label><input id="profile-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp">
-      <label class="checkbox-label consent-label"><input id="profile-adult" type="checkbox" required> Confirmo que soy mayor de 18 años.</label>
-      <label class="checkbox-label consent-label"><input id="profile-consent" type="checkbox" required> Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> y el tratamiento de mis datos según el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>. Entiendo que las fotografías cargadas pueden ser accesibles mediante su enlace durante la revisión.</label>
+      <div id="profile-consents" class="profile-consents" hidden>
+        <label class="checkbox-label consent-label"><input id="profile-adult" type="checkbox"> Confirmo que soy mayor de 18 años.</label>
+        <label class="checkbox-label consent-label"><input id="profile-consent" type="checkbox"> Acepto los <a href="/terminos" target="_blank" rel="noopener">términos</a> y el tratamiento de mis datos según el <a href="/privacidad" target="_blank" rel="noopener">aviso de privacidad</a>. Entiendo que las fotografías cargadas pueden ser accesibles mediante su enlace durante la revisión.</label>
+      </div>
       <p id="profile-message" class="form-message" role="status" aria-live="polite"></p>
       <button class="button button-dark button-wide" type="submit">Enviar para revisión <span aria-hidden="true">↗</span></button>
     </form>
@@ -139,8 +167,12 @@
   </dialog>
 
   <dialog id="service-dialog" class="site-dialog service-dialog" aria-labelledby="service-detail-title">
-    <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="Cerrar diálogo" value="cancel">×</button></form>
-    <div id="service-detail-content"></div>
+    <form method="dialog" class="service-detail-topbar">
+      <button class="service-back" value="cancel">← Volver al directorio</button>
+      <span class="service-detail-label">PERFIL DE SERVICIO</span>
+      <button class="dialog-close" aria-label="Cerrar perfil" value="cancel">×</button>
+    </form>
+    <div id="service-detail-content" class="service-detail-content"></div>
   </dialog>
 
   <dialog id="report-dialog" class="site-dialog" aria-labelledby="report-title">
